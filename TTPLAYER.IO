@@ -53,9 +53,6 @@
               KEY IS GREATER THAN OR EQUAL TO
                   PL-KEY1 OF PL-RECORD
               INVALID KEY
-                  DISPLAY
-                      "Doesn't: " PL-KEY1 OF PL-RECORD
-                  END-DISPLAY
                   SET NO-MORE-RECORDS TO TRUE
               NOT INVALID KEY
                   READ TTPLAYER NEXT RECORD
@@ -81,9 +78,6 @@
               KEY IS GREATER THAN OR EQUAL TO
                   PL-FNAME OF PL-RECORD
               INVALID KEY
-                  DISPLAY
-                      "Doesn't exist: " PL-FNAME OF PL-RECORD
-                  END-DISPLAY
                   SET NO-MORE-RECORDS TO TRUE
               NOT INVALID KEY
                   READ TTPLAYER NEXT RECORD
@@ -99,4 +93,5 @@
                AT END SET NO-MORE-RECORDS TO TRUE
            END-READ           
            .
+
 

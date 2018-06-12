@@ -16,7 +16,8 @@
           ALTERNATE RECORD KEY IS PL-FNAME OF PL-RECORD
               WITH DUPLICATES              
           .
-          SELECT PRINT-FILE ASSIGN TO "OUTPUT.JSON".
+          SELECT PRINT-FILE ASSIGN TO "OUTPUT.JSON"
+          ORGANIZATION IS LINE SEQUENTIAL.
 
        DATA DIVISION.
        FILE SECTION.
@@ -53,6 +54,7 @@
         78 C-DOUBLE-SPACE             VALUE "  ".
         78 C-BACKSLASH                VALUE "/".
         78 C-SPACE                    VALUE " ".
+        78 C-EOL                      VALUE "\n".
         78 C-RESULTS                  VALUE "results".
         78 C-ID                       VALUE "ID".
         78 C-FIRST-NAME               VALUE "firstName".
@@ -66,6 +68,9 @@
         78 C-BIRTHDAY                 VALUE "birthday".
         78 C-YES                      VALUE "Yes".
         78 C-NO                       VALUE "No".
+        77 CR   PIC X(01)             Value X'0D'.
+        77 LF   PIC X(01)             Value X'0A'.
+        77 CRLF PIC X(02)             Value X'0D0A'.
         01 FILLER                     PIC X(01).
           88 FL-NUMERIC-NO            VALUE "N".
           88 FL-NUMERIC-YES           VALUE "Y".
@@ -78,13 +83,11 @@
       *****************************************************************
        PROCEDURE DIVISION.
 
-         OPEN I-O TTPLAYER
-         OPEN OUTPUT PRINT-FILE
-         SET FL-FIRST-RECORD-YES  TO TRUE
-         INITIALIZE WS-STRING
-         DISPLAY 'Enter a name:'
-         ACCEPT WS-INPUT-NAME
+         PERFORM INITIALIZATION
 
+         PERFORM GET-INPUT-STRING
+
+         PERFORM WRITE-STARTING-STRING
 
          IF WS-INPUT-NAME NOT = SPACES
              MOVE FUNCTION UPPER-CASE(WS-FIRST-INITIAL) 
@@ -93,25 +96,37 @@
                                   TO WS-REST-NAME
              DISPLAY 'You entered: 'WS-INPUT-NAME
              PERFORM FIND-LAST-NAMES
-             PERFORM FIND-FIRST-NAMES
+             PERFORM FIND-FIRST-NAMES-1
          END-IF
-         STRING
-             WS-STRING              DELIMITED BY C-DOUBLE-SPACE
-             C-CLOSE-SQUARE-BRACKET DELIMITED BY SIZE
-             C-CLOSE-CURLY-BRACKET  DELIMITED BY SIZE
-                                    INTO WS-STRING
-         END-STRING
-         MOVE WS-STRING TO PRINT-LINE
-         WRITE PRINT-LINE
-         CLOSE TTPLAYER
-         CLOSE PRINT-FILE
-         STOP RUN
+         PERFORM WRITE-ENDING-STRING
+
+         PERFORM FINALIZATION
          .
 
+
+      *****************************************************************
+       INITIALIZATION                  SECTION.
+
+      * Open files
+         OPEN I-O TTPLAYER
+         OPEN OUTPUT PRINT-FILE
+
+      * Variable initialization
+         SET FL-FIRST-RECORD-YES  TO TRUE
+         INITIALIZE WS-STRING
+         .
+
+     *****************************************************************
+       GET-INPUT-STRING                SECTION.
+
+         DISPLAY 'Enter a name:'
+         ACCEPT WS-INPUT-NAME
+         .
 
      *****************************************************************
        FIND-LAST-NAMES                 SECTION.
 
+           DISPLAY 'Searching last names'
            INITIALIZE PL-RECORD
            MOVE LOW-VALUES TO PL-KEY1
            MOVE WS-INPUT-NAME TO PL-LNAME
@@ -132,6 +147,7 @@
       *****************************************************************
        FIND-FIRST-NAMES                SECTION.
 
+           DISPLAY 'Searching first names'
            INITIALIZE PL-RECORD
            MOVE WS-INPUT-NAME TO PL-FNAME
            PERFORM TTPLAYER2-START
@@ -148,6 +164,40 @@
            .
 
       *****************************************************************
+       FIND-FIRST-NAMES-1              SECTION.
+
+           DISPLAY 'Searching first names'   
+           INITIALIZE PL-RECORD
+           MOVE LOW-VALUES TO PL-KEY1
+           PERFORM TTPLAYER1-START
+           PERFORM 
+              UNTIL NO-MORE-RECORDS
+               IF PL-FNAME = WS-INPUT-NAME
+                   PERFORM TTPLAYER-DISPLAY-RECORD
+                   PERFORM WRITE-JSON-RECORD
+                   PERFORM TTPLAYER1-READ-NEXT
+               ELSE
+                   IF WS-INPUT-NAME > PL-FNAME
+                       MOVE WS-INPUT-NAME TO PL-FNAME
+                       PERFORM TTPLAYER1-START
+                   END-IF
+                   IF PL-FNAME NOT = WS-INPUT-NAME
+                       MOVE HIGH-VALUES TO PL-FNAME
+                       PERFORM TTPLAYER1-START
+                   END-IF
+               END-IF                    
+           END-PERFORM
+           .
+
+      *****************************************************************
+       FINALIZATION                    SECTION.
+
+         CLOSE TTPLAYER
+         CLOSE PRINT-FILE
+         STOP RUN
+          .
+
+      *****************************************************************
        TTPLAYER-DISPLAY-RECORD         SECTION.
 
            DISPLAY 'ID: 'PL-ID
@@ -161,15 +211,16 @@
       *****************************************************************
        WRITE-JSON-RECORD               SECTION.
 
+     
            IF FL-FIRST-RECORD-YES
-               PERFORM ADD-STARTING-STRING
                SET FL-FIRST-RECORD-NO TO TRUE
            ELSE
+      * Write previous record with comma
                PERFORM ADD-COMMA
+               PERFORM PRINT-TO-OUTPUT
            END-IF
-
+           INITIALIZE WS-STRING
            STRING
-               WS-STRING             DELIMITED BY C-DOUBLE-SPACE
                C-SPACE               DELIMITED BY SIZE
                C-OPEN-CURLY-BRACKET  DELIMITED BY SIZE
                INTO WS-STRING
@@ -185,7 +236,6 @@
            PERFORM ADD-POSTCODE
            PERFORM ADD-EMPLOYEE
            PERFORM ADD-VIP
-
            PERFORM ADD-BIRTHDAY
 
            STRING
@@ -197,7 +247,9 @@
            .
 
       *****************************************************************
-       ADD-STARTING-STRING             SECTION.
+       WRITE-STARTING-STRING             SECTION.
+
+           INITIALIZE WS-STRING
 
            STRING
                C-OPEN-CURLY-BRACKET  DELIMITED BY SIZE
@@ -209,6 +261,31 @@
                C-OPEN-SQUARE-BRACKET DELIMITED BY SIZE
                INTO WS-STRING
            END-STRING
+
+           PERFORM PRINT-TO-OUTPUT
+           .
+
+      *****************************************************************
+       WRITE-ENDING-STRING             SECTION.
+  
+           IF FL-FIRST-RECORD-NO
+      * Write last record without a comma at the end
+               PERFORM PRINT-TO-OUTPUT
+           END-IF
+           INITIALIZE WS-STRING
+           STRING
+             C-CLOSE-SQUARE-BRACKET DELIMITED BY SIZE
+             C-CLOSE-CURLY-BRACKET  DELIMITED BY SIZE
+                                    INTO WS-STRING
+           END-STRING  
+           PERFORM PRINT-TO-OUTPUT
+           .
+
+      *****************************************************************
+       PRINT-TO-OUTPUT                 SECTION.
+
+           MOVE WS-STRING TO PRINT-LINE
+           WRITE PRINT-LINE
            .
 
       *****************************************************************
